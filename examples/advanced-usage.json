@@ -1,0 +1,279 @@
+[
+    {
+        "id": "advanced-flow",
+        "type": "tab",
+        "label": "Advanced AWS Secrets Manager Examples",
+        "disabled": false,
+        "info": "Advanced examples showing different configuration types and usage patterns"
+    },
+    {
+        "id": "inject-env-creds",
+        "type": "inject",
+        "z": "advanced-flow",
+        "name": "Environment Credentials",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{}",
+        "payloadType": "json",
+        "x": 150,
+        "y": 80,
+        "wires": [
+            [
+                "secrets-env-creds"
+            ]
+        ]
+    },
+    {
+        "id": "secrets-env-creds",
+        "type": "aws-secret-manager",
+        "z": "advanced-flow",
+        "name": "Environment Credentials",
+        "awsConfig": "aws-config-env",
+        "secretId": "database-credentials",
+        "secretIdType": "str",
+        "storeIn": "global",
+        "variableName": "dbCreds",
+        "x": 380,
+        "y": 80,
+        "wires": [
+            [
+                "debug-env"
+            ]
+        ]
+    },
+    {
+        "id": "debug-env",
+        "type": "debug",
+        "z": "advanced-flow",
+        "name": "Debug Env",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 590,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "inject-context-creds",
+        "type": "inject",
+        "z": "advanced-flow",
+        "name": "Context Credentials",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{}",
+        "payloadType": "json",
+        "x": 150,
+        "y": 140,
+        "wires": [
+            [
+                "secrets-context-creds"
+            ]
+        ]
+    },
+    {
+        "id": "secrets-context-creds",
+        "type": "aws-secret-manager",
+        "z": "advanced-flow",
+        "name": "Context Credentials",
+        "awsConfig": "aws-config-context",
+        "secretId": "api-keys",
+        "secretIdType": "str",
+        "storeIn": "flow",
+        "variableName": "apiKeys",
+        "x": 380,
+        "y": 140,
+        "wires": [
+            [
+                "debug-context"
+            ]
+        ]
+    },
+    {
+        "id": "debug-context",
+        "type": "debug",
+        "z": "advanced-flow",
+        "name": "Debug Context",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 610,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "inject-dynamic-secret",
+        "type": "inject",
+        "z": "advanced-flow",
+        "name": "Dynamic Secret ID",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "secretId",
+                "v": "user-credentials",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{}",
+        "payloadType": "json",
+        "x": 150,
+        "y": 200,
+        "wires": [
+            [
+                "secrets-dynamic"
+            ]
+        ]
+    },
+    {
+        "id": "secrets-dynamic",
+        "type": "aws-secret-manager",
+        "z": "advanced-flow",
+        "name": "Dynamic Secret",
+        "awsConfig": "aws-config-iam",
+        "secretId": "secretId",
+        "secretIdType": "msg",
+        "storeIn": "output",
+        "variableName": "",
+        "x": 360,
+        "y": 200,
+        "wires": [
+            [
+                "debug-dynamic"
+            ]
+        ]
+    },
+    {
+        "id": "debug-dynamic",
+        "type": "debug",
+        "z": "advanced-flow",
+        "name": "Debug Dynamic",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 590,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "inject-env-vars",
+        "type": "inject",
+        "z": "advanced-flow",
+        "name": "Store as Env Vars",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{}",
+        "payloadType": "json",
+        "x": 150,
+        "y": 260,
+        "wires": [
+            [
+                "secrets-env-vars"
+            ]
+        ]
+    },
+    {
+        "id": "secrets-env-vars",
+        "type": "aws-secret-manager",
+        "z": "advanced-flow",
+        "name": "Store as Env Vars",
+        "awsConfig": "aws-config-env",
+        "secretId": "app-config",
+        "secretIdType": "str",
+        "storeIn": "env",
+        "variableName": "",
+        "x": 370,
+        "y": 260,
+        "wires": [
+            [
+                "debug-env-vars"
+            ]
+        ]
+    },
+    {
+        "id": "debug-env-vars",
+        "type": "debug",
+        "z": "advanced-flow",
+        "name": "Debug Env Vars",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 600,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "aws-config-env",
+        "type": "aws-secret-manager-config",
+        "name": "Environment Config",
+        "region": "eu-central-1",
+        "useIAMRole": false,
+        "accessKeyIdType": "env",
+        "accessKeyIdContext": "AWS_ACCESS_KEY_ID",
+        "secretAccessKeyType": "env",
+        "secretAccessKeyContext": "AWS_SECRET_ACCESS_KEY"
+    },
+    {
+        "id": "aws-config-context",
+        "type": "aws-secret-manager-config",
+        "name": "Context Config",
+        "region": "us-east-1",
+        "useIAMRole": false,
+        "accessKeyIdType": "global",
+        "accessKeyIdContext": "aws.accessKeyId",
+        "secretAccessKeyType": "global",
+        "secretAccessKeyContext": "aws.secretAccessKey"
+    },
+    {
+        "id": "aws-config-iam",
+        "type": "aws-secret-manager-config",
+        "name": "IAM Role Config",
+        "region": "eu-west-1",
+        "useIAMRole": true,
+        "accessKeyIdType": "str",
+        "accessKeyIdContext": "",
+        "secretAccessKeyType": "str",
+        "secretAccessKeyContext": ""
+    }
+] 

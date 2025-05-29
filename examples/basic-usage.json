@@ -1,0 +1,80 @@
+[
+    {
+        "id": "example-flow",
+        "type": "tab",
+        "label": "AWS Secrets Manager Example",
+        "disabled": false,
+        "info": "Example flow showing how to use AWS Secrets Manager node"
+    },
+    {
+        "id": "inject-node",
+        "type": "inject",
+        "z": "example-flow",
+        "name": "Trigger",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{}",
+        "payloadType": "json",
+        "x": 110,
+        "y": 100,
+        "wires": [
+            [
+                "secrets-manager-node"
+            ]
+        ]
+    },
+    {
+        "id": "secrets-manager-node",
+        "type": "aws-secret-manager",
+        "z": "example-flow",
+        "name": "Get DB Credentials",
+        "awsConfig": "aws-config",
+        "secretId": "my-database-secret",
+        "secretIdType": "str",
+        "storeIn": "global",
+        "variableName": "dbCredentials",
+        "x": 320,
+        "y": 100,
+        "wires": [
+            [
+                "debug-node"
+            ]
+        ]
+    },
+    {
+        "id": "debug-node",
+        "type": "debug",
+        "z": "example-flow",
+        "name": "Debug Output",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 550,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "aws-config",
+        "type": "aws-secret-manager-config",
+        "name": "AWS Config",
+        "region": "eu-central-1",
+        "useIAMRole": false,
+        "accessKeyIdType": "env",
+        "accessKeyIdContext": "AWS_ACCESS_KEY_ID",
+        "secretAccessKeyType": "env",
+        "secretAccessKeyContext": "AWS_SECRET_ACCESS_KEY"
+    }
+] 

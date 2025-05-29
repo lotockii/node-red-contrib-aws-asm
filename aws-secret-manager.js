@@ -1,154 +1,170 @@
+/**
+ * AWS Secrets Manager Node for Node-RED
+ * 
+ * This module provides AWS Secrets Manager operations for Node-RED.
+ * It supports flexible credential handling through the aws-secret-manager-config node.
+ * 
+ * @module node-red-contrib-aws-asm
+ */
+
 const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
 
 module.exports = function(RED) {
+    /**
+     * AWS Secrets Manager Node constructor
+     * 
+     * @param {Object} config - Node configuration
+     * @param {string} config.name - Node name
+     * @param {string} config.awsConfig - AWS configuration node ID
+     * @param {string} config.secretId - Secret ID
+     * @param {string} config.secretIdType - Type of secret ID input
+     * @param {string} config.storeIn - Where to store the secret
+     * @param {string} config.variableName - Variable name for storage
+     */
     function AWSSecretManagerNode(config) {
         RED.nodes.createNode(this, config);
         const node = this;
-        
-        // Get the config node
-        const awsConfig = RED.nodes.getNode(config.awsConfig);
-        if (!awsConfig) {
-            node.error("AWS Secret Manager configuration not found.");
-            node.status({fill:"red",shape:"ring",text:"No credentials"});
+        const secretsConfig = RED.nodes.getNode(config.awsConfig);
+
+        if (!secretsConfig) {
+            node.error("AWS Secrets Manager configuration not found.");
             return;
         }
 
-        // Get value based on type
+        // Store configuration
+        this.secretId = config.secretId;
+        this.secretIdType = config.secretIdType;
+        this.storeIn = config.storeIn;
+        this.variableName = config.variableName;
+
+        /**
+         * Get value from different input types
+         * @param {string} value - Value to get
+         * @param {string} type - Type of value (str, msg, flow, global, env)
+         * @param {Object} msg - Message object
+         * @returns {string|null} Retrieved value
+         */
         function getValue(value, type, msg) {
-            if (type === 'msg') {
-                return RED.util.getMessageProperty(msg, value);
-            } else if (type === 'flow') {
-                return node.context().flow.get(value);
-            } else if (type === 'global') {
-                return node.context().global.get(value);
-            } else if (type === 'env') {
-                return process.env[value];
-            }
-            return value;
-        }
+            if (!value) return null;
 
-        // Get credentials based on configuration
-        function getCredentials(msg) {
-            if (awsConfig.useIAMRole) {
-                return undefined;
-            }
-
-            const accessKeyId = getValue(awsConfig.accessKeyId, awsConfig.accessKeyIdType, msg);
-            const secretAccessKey = getValue(awsConfig.secretAccessKey, awsConfig.secretAccessKeyType, msg);
-
-            return {
-                accessKeyId,
-                secretAccessKey
-            };
-        }
-
-        // Create AWS Secrets Manager client
-        let client = null;
-
-        // Set initial node status
-        updateNodeStatus(node, config);
-
-        node.on('input', async function(msg, send, done) {
             try {
-                node.status({fill:"blue",shape:"dot",text:"Processing..."});
+                let result;
+                switch (type) {
+                    case 'msg':
+                        result = RED.util.getMessageProperty(msg, value);
+                        break;
+                    case 'flow':
+                        result = node.context().flow.get(value);
+                        break;
+                    case 'global':
+                        result = node.context().global.get(value);
+                        break;
+                    case 'env':
+                        result = process.env[value];
+                        break;
+                    default:
+                        result = value;
+                }
+                return result;
+            } catch (err) {
+                throw new Error(`Failed to get value for type: ${type}, value: ${value}. Error: ${err.message}`);
+            }
+        }
 
-                // Create new client for each message to get fresh credentials
-                client = new SecretsManagerClient({
-                    region: awsConfig.region,
-                    credentials: getCredentials(msg)
-                });
+        /**
+         * Store secret value based on configuration
+         * @param {Object|string} secretValue - Secret value to store
+         * @param {string} storeIn - Where to store (global, flow, env, output)
+         * @param {string} variableName - Variable name
+         * @param {Object} msg - Message object
+         */
+        function storeSecretValue(secretValue, storeIn, variableName, msg) {
+            switch (storeIn) {
+                case 'global':
+                    node.context().global.set(variableName || 'secret', secretValue);
+                    break;
+                case 'flow':
+                    node.context().flow.set(variableName || 'secret', secretValue);
+                    break;
+                case 'env':
+                    try {
+                        if (typeof secretValue === 'object') {
+                            Object.entries(secretValue).forEach(([key, value]) => {
+                                process.env[key] = String(value);
+                            });
+                        } else {
+                            const envKey = variableName || 'secret';
+                            process.env[envKey] = String(secretValue);
+                        }
+                    } catch (error) {
+                        throw new Error("Error setting environment variables: " + error.message);
+                    }
+                    break;
+                case 'output':
+                    msg.payload = secretValue;
+                    break;
+                default:
+                    throw new Error(`Unsupported storage type: ${storeIn}`);
+            }
+        }
+
+        // Handle incoming messages
+        node.on('input', async (msg, send, done) => {
+            try {
+                const client = secretsConfig.getClient(msg, node);
+                
+                if (!client) {
+                    throw new Error("Failed to initialize Secrets Manager client");
+                }
+
+                const secretId = getValue(node.secretId, node.secretIdType, msg) || msg.secretId;
+                if (!secretId) {
+                    throw new Error("Secret ID is required. Provide it in node configuration or msg.secretId");
+                }
+
+                node.status({ fill: "blue", shape: "dot", text: "Retrieving secret..." });
 
                 const command = new GetSecretValueCommand({
-                    SecretId: config.secretId || msg.secretId
+                    SecretId: secretId
                 });
 
                 const response = await client.send(command);
-                const secretString = response.SecretString;
-                const secretValue = JSON.parse(secretString);
-
-                // Store the secret value based on user's choice
-                switch (config.storeIn) {
-                    case 'global':
-                        node.context().global.set(config.variableName || 'secret', secretValue);
-                        break;
-                    case 'flow':
-                        node.context().flow.set(config.variableName || 'secret', secretValue);
-                        break;
-                    case 'env':
-                        try {
-                            if (typeof secretValue === 'object') {
-                                Object.entries(secretValue).forEach(([key, value]) => {
-                                    // Для env сохраняем только ключ и значение без префикса
-                                    process.env[key] = String(value);
-                                });
-                            } else {
-                                // Для одиночного значения используем имя переменной
-                                const envKey = config.variableName || 'secret';
-                                process.env[envKey] = String(secretValue);
-                            }
-                        } catch (error) {
-                            node.error("Error setting environment variables: " + error.message);
-                        }
-                        break;
-                    case 'output':
-                        msg.payload = secretValue;
-                        break;
+                
+                if (!response.SecretString) {
+                    throw new Error("Secret value is empty or not found");
                 }
 
-                // Send the message
-                if (config.storeIn === 'output') {
+                // Parse secret value (JSON or string)
+                let secretValue;
+                try {
+                    secretValue = JSON.parse(response.SecretString);
+                } catch (parseError) {
+                    secretValue = response.SecretString;
+                }
+
+                storeSecretValue(secretValue, node.storeIn, node.variableName, msg);
+
+                node.status({ fill: "green", shape: "dot", text: "Secret retrieved" });
+                
+                if (node.storeIn === 'output') {
                     send(msg);
                 } else {
-                    send({ ...msg, payload: { status: "Secret stored successfully" } });
+                    send({ ...msg, payload: { status: "Secret stored successfully", secretId: secretId } });
                 }
                 done();
 
-                // Update node status
-                node.status({fill:"green",shape:"dot",text:"Success"});
-            } catch (error) {
-                handleError(node, error);
-                msg.payload = { error: error.message };
+            } catch (err) {
+                node.error(err.message, msg);
+                node.status({ fill: "red", shape: "ring", text: err.message });
+                
+                msg.payload = { error: err.message };
                 send(msg);
                 done();
             }
         });
 
-        // Cleanup on node removal
-        node.on('close', function() {
-            if (client) {
-                client.destroy();
-            }
-            node.status({});
-        });
+        node.status({});
     }
 
-    /**
-     * Update node status based on configuration
-     * 
-     * @param {Object} node - Node-RED node instance
-     * @param {Object} config - Node configuration
-     */
-    function updateNodeStatus(node, config) {
-        if (!config.secretId) {
-            node.status({fill:"yellow",shape:"ring",text:"Secret ID needed in msg.secretId"});
-        } else {
-            node.status({});
-        }
-    }
-
-    /**
-     * Handle node errors
-     * 
-     * @param {Object} node - Node-RED node instance
-     * @param {Error} error - Error object
-     */
-    function handleError(node, error) {
-        node.error("AWS Secrets Manager Error: " + error.message);
-        node.status({fill:"red",shape:"dot",text:error.message});
-    }
-
-    RED.nodes.registerType("aws-secret-manager", AWSSecretManagerNode, {
-        color: "#b2e2b2",
-        icon: "font-awesome/fa-key"
-    });
-} 
+    RED.nodes.registerType("aws-secret-manager", AWSSecretManagerNode);
+}; 

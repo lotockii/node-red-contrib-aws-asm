@@ -1,8 +1,16 @@
 # node-red-contrib-aws-asm
 
-A Node-RED node for AWS Secrets Manager operations. This module provides a simple way to retrieve and manage secrets from AWS Secrets Manager directly from your Node-RED flows.
+A production-ready Node-RED node for AWS Secrets Manager operations that retrieves secrets and stores them in Node-RED context or environment variables.
 
-**Developed by Andrii Lototskyi**
+## Features
+
+- 🔐 Retrieve secrets from AWS Secrets Manager
+- 🏗️ Flexible credential configuration (IAM roles, direct credentials, context variables)
+- 📦 Store secrets in flow context, global context, or environment variables
+- 🔄 Support for both JSON and string secrets
+- 🎯 TypedInput support for dynamic secret IDs
+- ⚡ Real-time credential resolution from context
+- 🛡️ Production-ready with comprehensive error handling
 
 ## Installation
 
@@ -14,165 +22,228 @@ npm install node-red-contrib-aws-asm
 
 After installation, restart Node-RED to load the new nodes.
 
-## Features
-
-This node provides the following AWS Secrets Manager operations:
-
-- **Get Secret**: Retrieve secrets from AWS Secrets Manager
-- **Store Secrets**: Store secrets in different contexts:
-  - Flow Context
-  - Global Context
-  - Environment Variables
-  - Output Data
-
-### Supported Storage Options
-
-1. **Flow Context**
-   - Stores secret in flow context
-   - Access using `flow.get("variableName")`
-   - Persists for the duration of the flow
-
-2. **Global Context**
-   - Stores secret in global context
-   - Access using `global.get("variableName")`
-   - Persists across all flows
-
-3. **Environment Variables**
-   - Stores secret as environment variables
-   - Access using `env.get("key")` in function nodes
-   - For object secrets, each key becomes a separate environment variable
-
-4. **Output Data**
-   - Sends secret directly to the output
-   - Access via `msg.payload` in the next node
-
 ## Configuration
 
-### AWS Credentials
+### AWS Configuration Node
 
-1. Add a new AWS Secrets Manager Config node
-2. Choose an authentication method:
-   - IAM Role (recommended for EC2 instances)
-   - Access Key and Secret Key
+The module uses a configuration node that supports multiple authentication methods:
 
-### Node Configuration
+#### IAM Role Authentication (Recommended)
+- ✅ Use when running on EC2 instances with IAM roles
+- ✅ No credentials needed in Node-RED
+- ✅ Automatic credential rotation
 
-1. Add an AWS Secrets Manager node to your flow
-2. Configure the node with:
-   - AWS credentials (select the config node)
-   - Region (e.g., eu-central-1)
-   - Secret ID (ARN or name of the secret)
-   - Storage location (Flow, Global, Environment Variables, or Output)
-   - Variable name (for Flow, Global, and Environment Variables storage)
+#### Access Key Authentication
+Supports multiple credential sources:
 
-## Examples
+- **String**: Stored securely in Node-RED credentials (encrypted)
+- **Flow Context**: Retrieved from flow context variables
+- **Global Context**: Retrieved from global context variables  
+- **Environment Variables**: Retrieved from environment variables
 
-### Basic Secret Retrieval Flow
+### Examples
+
+#### Environment-based Configuration
+```javascript
+// Set environment variables
+process.env.AWS_ACCESS_KEY_ID = "your-access-key";
+process.env.AWS_SECRET_ACCESS_KEY = "your-secret-key";
+
+// Configure node to use environment variables
+Access Key ID: Environment Variable → AWS_ACCESS_KEY_ID
+Secret Access Key: Environment Variable → AWS_SECRET_ACCESS_KEY
+```
+
+#### Mixed Configuration
+```javascript
+// Store secret key in global context
+global.set("aws_secret", "your-secret-access-key");
+
+// Configure node
+Access Key ID: String → stored securely in Node-RED
+Secret Access Key: Global Context → aws_secret
+```
+
+## Usage
+
+### Basic Usage
+
+1. **Create AWS Configuration**
+   - Add an "aws-secret-manager-config" node
+   - Configure your AWS region and credentials
+
+2. **Add Secrets Manager Node**
+   - Drag "aws-secret-manager" node to your flow
+   - Select your AWS configuration
+   - Configure secret ID and storage options
+
+3. **Configure Secret ID**
+   The Secret ID supports multiple input types:
+   - **String**: Direct secret name or ARN
+   - **Message**: From `msg.payload.secretId` or `msg.secretId`
+   - **Flow Context**: From flow context variable
+   - **Global Context**: From global context variable
+   - **Environment Variable**: From environment variable
+
+### Storage Options
+
+#### Flow Context
+```javascript
+// Store in flow context
+storeIn: "flow"
+variableName: "dbCredentials"
+
+// Access later
+const credentials = flow.get("dbCredentials");
+```
+
+#### Global Context
+```javascript
+// Store in global context  
+storeIn: "global"
+variableName: "dbCredentials"
+
+// Access later
+const credentials = global.get("dbCredentials");
+```
+
+#### Environment Variables
+```javascript
+// For JSON secrets like: {"DB_HOST":"localhost","DB_USER":"admin"}
+storeIn: "env"
+// Each key becomes an environment variable automatically:
+// process.env.DB_HOST = "localhost"
+// process.env.DB_USER = "admin"
+// No Variable Name needed - each JSON key becomes a separate env var
+```
+
+#### Output Data
+```javascript
+// Send secret directly to output
+storeIn: "output"
+// msg.payload will contain the secret value
+```
+
+### Example Flow
 
 ```json
 [
     {
-        "id": "aws-secret-manager",
-        "type": "aws-secret-manager",
-        "name": "Get Secret",
-        "awsConfig": "aws-credentials",
-        "secretId": "arn:aws:secretsmanager:eu-central-1:123456789012:secret:my-secret",
-        "storeIn": "flow",
-        "variableName": "mySecret"
-    }
-]
-```
-
-### Environment Variables Flow
-
-```json
-[
+        "id": "inject-node",
+        "type": "inject",
+        "payload": "{}",
+        "wires": [["secrets-node"]]
+    },
     {
-        "id": "aws-secret-manager",
+        "id": "secrets-node", 
         "type": "aws-secret-manager",
-        "name": "Store as Environment Variables",
-        "awsConfig": "aws-credentials",
-        "secretId": "arn:aws:secretsmanager:eu-central-1:123456789012:secret:my-secret",
-        "storeIn": "env",
-        "variableName": "MY_SECRET"
+        "awsConfig": "aws-config",
+        "secretId": "my-database-secret",
+        "secretIdType": "str",
+        "storeIn": "global",
+        "variableName": "dbCredentials",
+        "wires": [["debug-node"]]
     }
 ]
 ```
 
-### Output Data Flow
+## Input
 
+### Message Properties
+- `msg.secretId` (optional): Secret ID if not configured in node
+
+### Example Input
+```javascript
+msg = {
+    secretId: "my-secret-name"
+}
+```
+
+## Output
+
+### Success Response (when storing in context/env)
+```javascript
+msg = {
+    payload: {
+        status: "Secret stored successfully",
+        secretId: "my-secret-name"
+    }
+}
+```
+
+### Success Response (when outputting data)
+```javascript
+msg = {
+    payload: {
+        username: "admin",
+        password: "secret123", 
+        host: "database.example.com"
+    }
+}
+```
+
+### Error Response
+```javascript
+msg = {
+    payload: {
+        error: "Error message"
+    }
+}
+```
+
+## Security Best Practices
+
+- ✅ Use IAM roles when possible (recommended for EC2 instances)
+- ✅ Store credentials in context variables rather than hardcoding
+- ✅ Use environment variables for sensitive configuration
+- ✅ Rotate access keys regularly
+- ✅ Follow the principle of least privilege
+- ✅ Enable AWS CloudTrail for audit logging
+
+## Error Handling
+
+The node provides comprehensive error handling:
+
+- **Configuration errors**: Missing or invalid AWS configuration
+- **Authentication errors**: Invalid credentials or permissions
+- **Secret not found**: Invalid secret ID or insufficient permissions
+- **Network errors**: Connection issues with AWS
+
+All errors are logged and sent in the message payload for downstream processing.
+
+## Requirements
+
+- Node.js >= 12.0.0
+- Node-RED >= 2.0.0
+- AWS account with Secrets Manager access
+- Appropriate IAM permissions
+
+## IAM Permissions
+
+Minimum required permissions:
 ```json
-[
-    {
-        "id": "aws-secret-manager",
-        "type": "aws-secret-manager",
-        "name": "Output Secret",
-        "awsConfig": "aws-credentials",
-        "secretId": "arn:aws:secretsmanager:eu-central-1:123456789012:secret:my-secret",
-        "storeIn": "output"
-    }
-]
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "secretsmanager:GetSecretValue"
+            ],
+            "Resource": "arn:aws:secretsmanager:region:account:secret:*"
+        }
+    ]
+}
 ```
-
-## Best Practices
-
-1. **Security**
-   - Use IAM roles when possible
-   - Rotate access keys regularly
-   - Follow the principle of least privilege
-   - Use environment variables for sensitive data
-
-2. **Performance**
-   - Cache secrets when appropriate
-   - Consider regional placement of secrets
-   - Use appropriate storage options for your use case
-
-3. **Error Handling**
-   - Always handle secret retrieval errors
-   - Implement retry logic for transient failures
-   - Log security-related events
-
-## Troubleshooting
-
-### Common Issues
-
-1. **"Secret ID required" Error**
-   - Ensure the Secret ID is set in node config or msg.secretId
-   - Verify the Secret ID format (should be a valid AWS Secrets Manager ARN or name)
-
-2. **"Could not load credentials" Error**
-   - Check AWS credentials configuration
-   - Verify IAM role permissions
-   - Ensure environment variables are set correctly
-
-3. **"Invalid region" Error**
-   - Verify the region format (e.g., eu-central-1)
-   - Ensure the region is supported by AWS Secrets Manager
-
-4. **"Secret not found" Error**
-   - Verify the secret exists in AWS Secrets Manager
-   - Check if you have permissions to access the secret
-   - Ensure the secret ID is correct
-
-### Debugging
-
-1. Enable Node-RED debug output
-2. Check AWS CloudWatch logs
-3. Verify IAM permissions
-4. Test with AWS CLI first
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
 
 ## License
 
 MIT
 
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
 ## Support
 
-For issues and feature requests, please use the [GitHub issue tracker](https://github.com/lotockii/node-red-contrib-aws-asm/issues). 
+If you encounter any issues or have questions, please [open an issue](https://github.com/lotockii/node-red-contrib-aws-asm/issues) on GitHub. 
